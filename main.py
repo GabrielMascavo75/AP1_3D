@@ -639,7 +639,39 @@ def compute_bounds_y(vertices, faces=None, low_percentile=2, high_percentile=98)
 
     return percentil(low_percentile), percentil(high_percentile)
 
+def normalize_mesh(vertices, target_height=1.0):
+    """
+    Reescala os vértices para que a altura (eixo Y) seja
+    target_height. Assim o código não precisa saber se o OBJ
+    é o fallback (altura ~2) ou um modelo real (altura ~40).
+    """
+    min_y, max_y = compute_bounds_y(vertices)
+    height = max_y - min_y
 
+    if height <= 0:
+        return vertices
+
+    scale = target_height / height
+    return [(x * scale, y * scale, z * scale) for x, y, z in vertices]
+def deform_rock(vertices, amount=0.25, seed=42):
+    """
+    Aplica um deslocamento pseudo-aleatório em cada vértice,
+    para transformar a esfera lisa do rockmaterial.obj em uma
+    rocha irregular. `amount` controla a intensidade da
+    deformação (0.0 = esfera perfeita, 0.5 = bem irregular).
+    """
+    rng = random.Random(seed)
+    deformados = []
+
+    for x, y, z in vertices:
+        # Cada vértice recebe um offset fixo, reproduzível.
+        dx = rng.uniform(-amount, amount)
+        dy = rng.uniform(-amount, amount)
+        dz = rng.uniform(-amount, amount)
+        deformados.append((x + dx, y + dy, z + dz))
+
+    return deformados
+    
 def anchor_y(target_y, local_anchor_y, scale_y, embed=0.0, teto=False):
     """
     Calcula a posição em Y para que o vértice LOCAL local_anchor_y
@@ -966,7 +998,8 @@ def main():
         "models/Stalagmite_Medium0.obj",
         "estalagmite"
     )
-
+    stalagmite_v = normalize_mesh(stalagmite_v, target_height=10.0)
+    
     rock_v, rock_f = load_obj(
         "models/rockmaterial.obj",
         "rocha"
@@ -978,6 +1011,7 @@ def main():
     stalagmite_min_y, stalagmite_max_y = compute_bounds_y(
         stalagmite_v, stalagmite_f
     )
+    
     rock_min_y, rock_max_y = compute_bounds_y(rock_v, rock_f)
 
     # ---- DIAGNÓSTICO ----
@@ -1045,7 +1079,7 @@ def main():
     # caixa delimitadora real do modelo carregado (fallback ou
     # OBJ), em vez de um valor de Y fixo "chutado" — assim ela
     # encosta no chão não importa o tamanho do modelo.
-    ROCK_SCALE = 1.2
+    ROCK_SCALE = 1.3
     # Margem de "afundamento": empurra o ponto de ancoragem um
     # pouco além do chão/teto, para compensar bases/topos
     # irregulares dos modelos OBJ reais (ver docstring de anchor_y).
@@ -1074,10 +1108,10 @@ def main():
             "modelo": "estalagmite",
             "v": stalagmite_v,
             "f": stalagmite_f,
-            "pos": [-4.0, anchor_y(FLOOR_Y, stalagmite_max_y, -altura1, embed=FLOOR_EMBED), 7.0],
+            "pos": [-4.0, anchor_y(FLOOR_Y, stalagmite_min_y, altura1, embed=FLOOR_EMBED), 7.0],
             "scale": [
                 0.18 * s1,
-                -altura1,
+                altura1,
                 0.18 * s1
             ],
             "rot": [0, 0.2, 0],
@@ -1088,10 +1122,10 @@ def main():
             "modelo": "estalagmite",
             "v": stalagmite_v,
             "f": stalagmite_f,
-            "pos": [3.5, anchor_y(FLOOR_Y, stalagmite_max_y, -altura2, embed=FLOOR_EMBED), 8.5],
+            "pos": [3.5, anchor_y(FLOOR_Y, stalagmite_min_y, altura2, embed=FLOOR_EMBED), 8.5],
             "scale": [
                 0.24 * s2,
-                -altura2,
+                altura2,
                 0.24 * s2
             ],
             "rot": [0, -0.5, 0],
@@ -1109,10 +1143,10 @@ def main():
             "modelo": "estalactite_teto",
             "v": stalagmite_v,
             "f": stalagmite_f,
-            "pos": [-0.5, anchor_y(CEILING_Y, stalagmite_max_y, altura3, embed=CEILING_EMBED, teto=True), 6.5],
+            "pos": [-0.5, anchor_y(CEILING_Y, stalagmite_max_y, -altura3, embed=CEILING_EMBED, teto=True), 6.5],
             "scale": [
                 0.22 * s3,
-                altura3,
+                -altura3,
                 0.22 * s3
             ],
             "rot": [0, 0.8, 0],
